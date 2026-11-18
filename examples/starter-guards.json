@@ -1,0 +1,174 @@
+{
+  "rules": [
+    {
+      "id": "no-force-push",
+      "tools": "Bash",
+      "pattern": "\\bgit\\s+push\\b[^\\n]*\\s(--force(-with-lease)?|-f)\\b",
+      "decision": "ask",
+      "reason": "Force push rewrites shared history. Ask the user first.",
+      "tests": {
+        "hit": [
+          "git push --force origin main",
+          "npm test && git push -f origin fix",
+          "git push --force-with-lease"
+        ],
+        "miss": [
+          "git push origin main",
+          "git fetch --force",
+          "git push -u origin feature/x"
+        ]
+      }
+    },
+    {
+      "id": "no-discard-work",
+      "tools": "Bash",
+      "pattern": "\\bgit\\s+(reset\\s+[^\\n]*--hard|clean\\s+-[a-zA-Z]*f|checkout\\s+--\\s+\\.|restore\\s+\\.)",
+      "decision": "ask",
+      "reason": "This throws away uncommitted work. Ask the user first.",
+      "tests": {
+        "hit": [
+          "git reset --hard HEAD~1",
+          "git clean -fdx",
+          "git checkout -- ."
+        ],
+        "miss": [
+          "git reset HEAD file.txt",
+          "git clean -n",
+          "git checkout -b fix/login"
+        ]
+      }
+    },
+    {
+      "id": "rm-outside-project",
+      "tools": "Bash",
+      "pattern": "\\brm\\s+(-[a-zA-Z]+\\s+)*-[a-zA-Z]*[rR][a-zA-Z]*\\s+([^\\n]*\\s)?(/|~|\\$HOME|\\.\\./)",
+      "decision": "ask",
+      "reason": "Recursive delete outside the project folder. Ask the user first.",
+      "tests": {
+        "hit": [
+          "rm -rf ~/old-project",
+          "rm -rf /var/tmp/cache",
+          "rm -r ../shared"
+        ],
+        "miss": [
+          "rm -rf node_modules",
+          "rm -rf ./build dist",
+          "rm notes.txt"
+        ]
+      }
+    },
+    {
+      "id": "db-destructive",
+      "tools": "Bash",
+      "pattern": "\\b(psql|mysql|sqlite3|mongosh|clickhouse-client)\\b[^\\n]*\\b(drop\\s+(table|database|schema)|truncate)\\b",
+      "decision": "ask",
+      "reason": "Destructive SQL through a database client. Ask the user first.",
+      "flags": "i",
+      "tests": {
+        "hit": [
+          "psql -c 'DROP TABLE users'",
+          "mysql -e \"truncate table logs\""
+        ],
+        "miss": [
+          "grep -rn 'DROP TABLE' migrations/",
+          "psql -c 'select 1'"
+        ]
+      }
+    },
+    {
+      "id": "infra-destroy",
+      "tools": "Bash",
+      "pattern": "\\b(terraform|tofu)\\s+(destroy|apply\\b[^\\n]*-auto-approve)|\\bpulumi\\s+destroy\\b|\\bkubectl\\s+delete\\b",
+      "decision": "ask",
+      "reason": "This removes or changes live infrastructure. Ask the user first.",
+      "tests": {
+        "hit": [
+          "terraform destroy",
+          "terraform apply -auto-approve",
+          "kubectl delete ns staging"
+        ],
+        "miss": [
+          "terraform plan",
+          "kubectl get pods",
+          "terraform apply"
+        ]
+      }
+    },
+    {
+      "id": "package-publish",
+      "tools": "Bash",
+      "pattern": "\\b(npm|pnpm|yarn)\\s+publish\\b|\\bcargo\\s+publish\\b|\\btwine\\s+upload\\b|\\bgem\\s+push\\b",
+      "decision": "ask",
+      "reason": "Publishing a package cannot be taken back. Ask the user first.",
+      "tests": {
+        "hit": [
+          "npm publish --access public",
+          "cargo publish"
+        ],
+        "miss": [
+          "npm pack",
+          "npm run publish-docs"
+        ]
+      }
+    },
+    {
+      "id": "secret-files",
+      "tools": "Read|Edit|Write|MultiEdit",
+      "pattern": "(^|/)(\\.env(\\.(?!example$|sample$|template$)[\\w.-]+)?|id_(rsa|ed25519|ecdsa)|[^/]+\\.pem|\\.npmrc|\\.netrc)$",
+      "decision": "ask",
+      "reason": "This file usually holds secrets. Ask the user before opening or changing it.",
+      "test_tool": "Read",
+      "tests": {
+        "hit": [
+          ".env",
+          "config/.env.production",
+          "/home/dev/.ssh/id_ed25519"
+        ],
+        "miss": [
+          ".env.example",
+          "src/environment.ts",
+          "docs/env.md"
+        ]
+      }
+    },
+    {
+      "id": "secret-files-shell",
+      "tools": "Bash",
+      "pattern": "\\b(cat|less|more|head|tail|bat|grep|source)\\b[^|;&\\n]*(^|[\\s/'\\\"])\\.env(\\.(?!example\\b|sample\\b|template\\b)[\\w-]+)?(?=$|[\\s'\\\"])",
+      "decision": "ask",
+      "reason": "This prints a file that usually holds secrets. Ask the user first.",
+      "tests": {
+        "hit": [
+          "cat .env",
+          "grep API_KEY config/.env.local",
+          "tail -n 5 .env"
+        ],
+        "miss": [
+          "cat .env.example",
+          "cat environment.md",
+          "grep -rn env src"
+        ]
+      }
+    },
+    {
+      "id": "guard-self",
+      "tools": "Edit|Write|MultiEdit",
+      "pattern": "(^|/)\\.claude/(settings(\\.local)?\\.json|hooks/[^/]+|blacksmith/guards\\.json)$",
+      "decision": "ask",
+      "reason": "This changes the agent's own permissions, hooks or guard rules. Ask the user first.",
+      "test_tool": "Edit",
+      "tests": {
+        "hit": [
+          "/home/dev/.claude/settings.json",
+          "/repo/.claude/settings.local.json",
+          "/home/dev/.claude/blacksmith/guards.json"
+        ],
+        "miss": [
+          "src/settings.json",
+          "/repo/.claude/skills/x/SKILL.md",
+          "docs/claude.md"
+        ]
+      }
+    }
+  ]
+}
